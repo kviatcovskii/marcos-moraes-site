@@ -234,6 +234,16 @@ a { color: var(--accent-ink); }
 .hero-dark .viewfinder { position: relative; z-index: 2; opacity: 0; animation: hdPanelIn .8s ease .3s forwards, hdPanelFloat 5s ease-in-out .8s infinite; }
 .hero-dark .viewfinder .rec .dot { animation: hdDotPulse 1.4s ease-in-out infinite; }
 @keyframes hdDotPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.7); } }
+/* 3D particle object (Three.js), used in place of .growth-panel/.viewfinder on some pages */
+.hd-canvas-wrap { position: relative; height: 480px; }
+.hd-canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+@media (max-width: 860px) { .hd-canvas-wrap { height: 320px; } }
+
+/* small 3D particle badge (Three.js), floats at the corner of a photo without replacing it */
+.hd-badge { position: absolute; width: 130px; height: 130px; right: -26px; bottom: -18px; z-index: 4; pointer-events: none; }
+.hd-badge canvas { width: 100%; height: 100%; display: block; }
+@media (max-width: 860px) { .hd-badge { width: 96px; height: 96px; right: -14px; bottom: -10px; } }
+
 .hero-dark-centered { min-height: 88vh; display: flex; flex-direction: column; padding: 0; }
 .hero-dark-centered .hd-body { position: relative; z-index: 3; flex: 1; display: flex; flex-direction: column; align-items: center;
   justify-content: flex-end; text-align: center; padding: 0 24px 64px; max-width: 640px; margin: 0 auto; }
@@ -316,6 +326,7 @@ a { color: var(--accent-ink); }
     <div class="rec"><span class="dot"></span>REC</div>
     <div class="tc-big">00:08:41:19</div>
     <div class="exp">10-30% COMISSÃO<br />POR VENDA</div>
+    <div class="hd-badge"><canvas id="badgeCanvas"></canvas></div>
   </div>
 </header>
 
@@ -439,6 +450,74 @@ a { color: var(--accent-ink); }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+})();
+</script>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script>
+(function () {
+  if (!window.THREE) return;
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) return;
+  var wrap = document.querySelector('.hd-badge');
+  var canvas = document.getElementById('badgeCanvas');
+  if (!wrap || !canvas) return;
+
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 20);
+  camera.position.set(0, 0, 3.2);
+
+  var accentHex = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#C23F30';
+  var glyphColor = new THREE.Color(accentHex);
+  var glyphCanvas = document.createElement('canvas');
+  glyphCanvas.width = 200; glyphCanvas.height = 200;
+  var gctx = glyphCanvas.getContext('2d');
+  gctx.fillStyle = '#fff';
+  gctx.font = '900 150px Arial';
+  gctx.textAlign = 'center';
+  gctx.textBaseline = 'middle';
+  gctx.fillText('$', 100, 106);
+  var gdata = gctx.getImageData(0, 0, 200, 200).data;
+  var STEP = 2, SCALE = 1.9;
+  var positions = [];
+  for (var py = 0; py < 200; py += STEP) {
+    for (var px = 0; px < 200; px += STEP) {
+      var alpha = gdata[(py * 200 + px) * 4 + 3];
+      if (alpha < 140) continue;
+      var x = (px - 100) / 200 * SCALE;
+      var y2 = -(py - 100) / 200 * SCALE;
+      var z = (Math.random() - 0.5) * 0.1;
+      positions.push(x, y2, z);
+    }
+  }
+  var posArr = new Float32Array(positions);
+  var geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+  var mat = new THREE.PointsMaterial({ size: 0.05, color: glyphColor, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+  var points = new THREE.Points(geo, mat);
+  scene.add(points);
+
+  function resize() {
+    var w = wrap.clientWidth, h = wrap.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  var clock = new THREE.Clock();
+  function animate() {
+    requestAnimationFrame(animate);
+    var t = clock.getElapsedTime();
+    points.rotation.y = Math.sin(t * 0.4) * 0.4;
+    points.position.y = Math.sin(t * 0.8) * 0.08;
+    renderer.render(scene, camera);
+  }
+  animate();
 })();
 </script>
 
